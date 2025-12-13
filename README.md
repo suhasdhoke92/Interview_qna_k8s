@@ -1,6 +1,6 @@
 # KubernetesInterviewQ&A
 
-This repository provides a comprehensive Q&A guide for preparing for Kubernetes-related interview questions. It covers Kubernetes architecture, components interaction, services, labels/selectors, service types, kube-proxy, headless services, and real-world design decisions.
+This repository provides a comprehensive Q&A guide for preparing for Kubernetes-related interview questions. It covers Kubernetes architecture, components interaction, services, labels/selectors, service types, kube-proxy, headless services, cross-namespace access, network policies, deployment strategies, and rollback approaches.
 
 ## Q&A for Kubernetes Interview
 
@@ -173,5 +173,150 @@ spec:
 
 **Best Practice**: Use **Ingress** (with one LoadBalancer) instead of many LoadBalancer services.
 
+### 11. Can a Pod access a Service in a different namespace?
+
+**Question**: Can a Pod in one namespace access a Service in another namespace?
+
+**Answer**:
+Yes, Services are accessible across namespaces by default using their fully qualified domain name (FQDN).
+
+- **FQDN Format**: `<service-name>.<namespace>.svc.cluster.local`
+- **Example**:
+  - Service `db-service` in namespace `database`.
+  - Pod in namespace `frontend` can access it via:
+    ```
+    db-service.database.svc.cluster.local:3306
+    ```
+- **Short Name (Same Namespace)**: If in the same namespace, just `<service-name>` works.
+- **DNS Search Domains**: Kubernetes adds search domains, so sometimes `db-service.database` suffices.
+
+- **Additional Notes**:
+  - Network Policies can restrict cross-namespace traffic if applied.
+  - Ensure DNS resolution is working (`CoreDNS` pods healthy).
+
+### 12. How do you restrict access to a database Pod so only one application can access it?
+
+**Question**: How would you allow only a specific application Pod to access a database Pod in the same namespace?
+
+**Answer**:
+By default, all Pods in a namespace can communicate. To restrict access, use **Network Policies**.
+
+- **Steps**:
+  1. Label the database Pod:
+     ```yaml
+     metadata:
+       labels:
+         app: db
+     ```
+  2. Label the application Pod:
+     ```yaml
+     metadata:
+       labels:
+         app: myapp
+     ```
+  3. Create a NetworkPolicy on the database:
+     ```yaml
+     apiVersion: networking.k8s.io/v1
+     kind: NetworkPolicy
+     metadata:
+       name: db-access-policy
+       namespace: my-namespace
+     spec:
+       podSelector:
+         matchLabels:
+           app: db
+       policyTypes:
+         - Ingress
+       ingress:
+         - from:
+             - podSelector:
+                 matchLabels:
+                   app: myapp
+           ports:
+             - protocol: TCP
+               port: 3306
+     ```
+- **Effect**: Only Pods with label `app: myapp` can send traffic to the database Pod on port 3306. All other traffic is denied.
+
+- **Additional Notes**:
+  - Requires a CNI plugin supporting Network Policies (e.g., Calico, Weave Net).
+  - Network Policies are deny-by-default; explicit allow rules are needed.
+
+### 13. Explain the deployment strategy followed in your organization?
+
+**Question**: What deployment strategies do you use in production, and why?
+
+**Answer**:
+In production, we avoid direct rollouts due to risk. We use:
+
+1. **Canary Deployments**:
+   - Roll out the new version to a small percentage of users (e.g., 10%).
+   - Monitor metrics (errors, latency) for a period.
+   - Gradually increase traffic: 10% → 20% → 50% → 100%.
+   - Implementation:
+     - Create separate Services/Ingress for old and new versions.
+     - Use Ingress annotations (e.g., NGINX `canary` weight) or Istio traffic splitting to route percentage-based traffic.
+     - Example with NGINX Ingress:
+       ```yaml
+       metadata:
+         annotations:
+           nginx.ingress.kubernetes.io/canary: "true"
+           nginx.ingress.kubernetes.io/canary-weight: "10"
+       ```
+
+2. **Blue-Green Deployments**:
+   - Deploy the new version (green) alongside the old (blue).
+   - Switch traffic instantly via Load Balancer or Ingress routing.
+   - Rollback by switching back to blue.
+
+- **Why**:
+  - Minimizes impact: Issues affect only a subset of users.
+  - Allows quick rollback without downtime.
+  - Supports A/B testing and feature flags.
+
+### 14. Explain the rollback strategy followed in your organization?
+
+**Question**: How do you handle rollbacks in production?
+
+**Answer**:
+We follow a GitOps approach with ArgoCD or Helm for deployments:
+
+- **Rollback Process**:
+  - Revert the Helm chart or manifest version in Git to the previous stable commit.
+  - Since ArgoCD auto-sync is enabled, it detects the change and applies the previous version to the cluster.
+  - For Helm: `helm rollback <release-name> <revision>`.
+
+- **Prevention**:
+  - Use canary deployments to catch issues early with minimal user impact.
+  - Monitor with Prometheus/Grafana during rollout.
+  - Automated tests (smoke, integration) in staging before production.
+
+- **Goal**: Minimize rollback frequency by validating changes gradually.
+
+### 15. How would you design a solution to avoid rollbacks?
+
+**Question**: What strategies do you use to minimize or avoid rollbacks?
+
+**Answer**:
+To avoid rollbacks:
+
+1. **Progressive Delivery**:
+   - **Canary Deployments**: Expose new version to 10% of traffic, monitor, then increase.
+   - **Feature Flags**: Enable/disable features without redeploying.
+
+2. **Extensive Pre-Production Testing**:
+   - CI/CD with unit, integration, and end-to-end tests.
+   - Staging environment mirroring production.
+
+3. **Observability**:
+   - Real-time monitoring (Prometheus, Grafana) and alerting.
+   - Distributed tracing (Jaeger) to catch issues early.
+
+4. **GitOps with Auto-Sync**:
+   - Changes are reviewed and merged via PRs.
+   - ArgoCD syncs only validated manifests.
+
+- **Result**: Issues are caught before full rollout, reducing the need for rollbacks.
+
 ## Conclusion
-Understanding Kubernetes architecture, component interaction, Services, kube-proxy, and service types is fundamental for any Kubernetes interview. These answers cover the most frequently asked conceptual and practical questions, helping you confidently explain how Kubernetes achieves reliability, service discovery, and scalability.
+Understanding Kubernetes architecture, component interaction, Services, kube-proxy, Network Policies, and deployment strategies is fundamental for any Kubernetes interview. These answers cover the most frequently asked conceptual and practical questions, helping you confidently explain how Kubernetes achieves reliability, service discovery, security, and zero-downtime deployments.
