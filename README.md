@@ -318,5 +318,214 @@ To avoid rollbacks:
 
 - **Result**: Issues are caught before full rollout, reducing the need for rollbacks.
 
+
+### 16. Explain the deployment strategies that you used in the past?
+
+**Question**: Explain the deployment strategies that you used in the past.
+
+**Answer**:
+In past projects, I have used:
+
+1. **Blue-Green Deployments**:
+   - Deploy the new version (green) alongside the current version (blue).
+   - Switch traffic instantly by updating the Load Balancer or Service routing to point to green.
+   - **Advantages**: Zero downtime, instant rollback by switching back to blue.
+   - **Rollback**: Simple — repoint traffic to the old version.
+
+2. **Canary Deployments**:
+   - Gradually shift traffic to the new version (e.g., 10% → 20% → 50% → 100%).
+   - Monitor metrics during each phase.
+   - **Implementation**: Use Ingress controllers with canary annotations or tools like Istio/Flagger for traffic splitting.
+   - **Advantages**: Limits blast radius; issues affect only a small user subset.
+
+- **Why These**:
+  - Blue-Green for low-risk, instant switches.
+  - Canary for safer, gradual rollouts with real-user feedback.
+  - Combined with monitoring (Prometheus) and automated tests.
+
+### 17. Explain the role of CoreDNS in k8s?
+
+**Question**: Explain the role of CoreDNS in Kubernetes.
+
+**Answer**:
+CoreDNS is the default DNS server in Kubernetes clusters, responsible for DNS resolution.
+
+- **Key Functions**:
+  - Translates Service names to ClusterIPs (e.g., `my-svc.my-namespace.svc.cluster.local` → `10.96.0.1`).
+  - Handles Pod DNS for headless services (A records to Pod IPs).
+  - Forwards external DNS queries via upstream servers (e.g., `/etc/resolv.conf`).
+  - Supports plugins for custom resolution (e.g., rewrite, cache).
+
+- **Example**:
+  - A Pod accesses `payment.default.svc.cluster.local:8080`.
+  - CoreDNS resolves `payment.default.svc.cluster.local` to the Service’s ClusterIP.
+
+- **Configuration**:
+  - Defined in the `coredns` ConfigMap in `kube-system` namespace.
+  - Runs as a Deployment with replicas for high availability.
+
+- **Troubleshooting**:
+  - Check CoreDNS Pods: `kubectl get pods -n kube-system -l k8s-app=kube-dns`.
+  - Inspect logs for resolution failures.
+
+
+### 18. A DevOps engineer tainted a node as "NoSchedule". Can you still schedule a Pod?
+
+**Question**: A node is tainted with `NoSchedule`. Can you schedule a Pod on it?
+
+**Answer**:
+By default, **no** — the taint repels Pods, and the scheduler will avoid placing new Pods on the node.
+
+- **Exception**: Add a **toleration** to the Pod spec to allow scheduling:
+  ```yaml
+  spec:
+    tolerations:
+      - key: "app"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+  ```
+
+- **Commands**:
+  - Apply taint:
+    ```bash
+    kubectl taint nodes node1 app=true:NoSchedule
+    ```
+  - Pod with toleration will schedule on the node; others will not.
+
+- **Use Cases**:
+  - Reserve nodes for specific workloads (e.g., GPU nodes).
+  - Drain nodes for maintenance.
+
+### 19. Pod is stuck in CrashLoopBackOff?
+
+**Question**: A Pod is in CrashLoopBackOff state. How would you troubleshoot?
+
+**Answer**:
+CrashLoopBackOff means the container exits repeatedly.
+
+- **Steps**:
+  1. **Check Logs**:
+     ```bash
+     kubectl logs <pod-name> --previous  # Logs from last crashed container
+     kubectl logs <pod-name> -f         # Follow current logs
+     ```
+     Look for application errors (e.g., missing config, crash on startup).
+
+  2. **Describe Pod**:
+     ```bash
+     kubectl describe pod <pod-name>
+     ```
+     Check events for reasons (e.g., OOMKilled, ImagePullBackOff).
+
+  3. **Liveness Probe Issues**:
+     - Misconfigured liveness probe (e.g., wrong path `/healthz` instead of `/health`).
+     - Fix probe path, initial delay, or thresholds:
+       ```yaml
+       livenessProbe:
+         httpGet:
+           path: /health
+           port: 8080
+         initialDelaySeconds: 30
+         periodSeconds: 10
+       ```
+
+- **Common Causes**:
+  - Application crash on startup.
+  - Wrong command/args in Pod spec.
+  - Resource limits causing OOM.
+
+### 20. What is the difference between liveness and readiness probes?
+
+**Question**: Explain the difference between liveness and readiness probes.
+
+**Answer**:
+
+| Probe Type     | Purpose                                                                 | Failure Action                                      |
+|----------------|-------------------------------------------------------------------------|-----------------------------------------------------|
+| **Liveness**   | Checks if the container is alive and healthy.                           | Container is restarted if probe fails.              |
+| **Readiness**  | Checks if the container is ready to serve traffic.                      | Pod is removed from Service endpoints if probe fails (no restart). |
+
+- **Liveness Probe**:
+  - Detects deadlocks or crashed apps.
+  - Example: HTTP GET `/healthz` returns 200 → alive.
+  - Failure → Kubernetes restarts the container.
+
+- **Readiness Probe**:
+  - Ensures Pod is ready (e.g., connected to DB, loaded config).
+  - Failure → Traffic not sent to Pod (removed from Service).
+  - Pod remains running.
+
+- **Configuration Example**:
+  ```yaml
+  livenessProbe:
+    httpGet:
+      path: /healthz
+      port: 8080
+    initialDelaySeconds: 15
+    periodSeconds: 10
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: 8080
+    initialDelaySeconds: 5
+    periodSeconds: 5
+  ```
+
+- **Use Both**: Liveness for restarts, readiness for traffic control.
+
+### 21. Explain the difference between Ingress and LoadBalancer service type.
+
+**Question**: Explain the difference between Ingress and LoadBalancer-type Services.
+
+**Answer**:
+Both expose applications externally, but differ in cost, flexibility, and use cases.
+
+- **LoadBalancer Service**:
+  - Provisions a dedicated cloud load balancer (e.g., AWS ALB/ELB) for each Service.
+  - Unique external IP/DNS per Service.
+  - **Disadvantages**:
+    - Expensive (one LB per Service → high cost for many Services).
+    - Limited routing (no host/path-based rules natively).
+    - Works only in clouds with Cloud Controller Manager.
+
+- **Ingress**:
+  - Uses a single Ingress controller (e.g., NGINX, Traefik) with one LoadBalancer.
+  - Routes traffic to multiple Services based on host (e.g., app1.example.com) or path (e.g., /api).
+  - **Advantages**:
+    - Cost-effective (one LB for many Services).
+    - Advanced routing, TLS termination, rewrites.
+    - Works with various backends (ALB, NLB, etc.).
+  - **Example**:
+    ```yaml
+    apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    metadata:
+      name: my-ingress
+    spec:
+      rules:
+        - host: app1.example.com
+          http:
+            paths:
+              - path: /
+                pathType: Prefix
+                backend:
+                  service:
+                    name: app1-svc
+                    port:
+                      number: 80
+        - host: app2.example.com
+          http:
+            paths:
+              - path: /
+                backend:
+                  service:
+                    name: app2-svc
+                    port:
+                      number: 80
+    ```
+
+- **Recommendation**: Use **Ingress** for production to save costs and enable advanced routing.
+
 ## Conclusion
 Understanding Kubernetes architecture, component interaction, Services, kube-proxy, Network Policies, and deployment strategies is fundamental for any Kubernetes interview. These answers cover the most frequently asked conceptual and practical questions, helping you confidently explain how Kubernetes achieves reliability, service discovery, security, and zero-downtime deployments.
