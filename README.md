@@ -527,5 +527,260 @@ Both expose applications externally, but differ in cost, flexibility, and use ca
 
 - **Recommendation**: Use **Ingress** for production to save costs and enable advanced routing.
 
+
+### 22. Your app works with ClusterIP but fails with Ingress — how do you troubleshoot it?
+
+**Question**: Your app works with ClusterIP but fails with Ingress — how do you troubleshoot it?
+
+**Answer**:
+When an application works fine via ClusterIP but fails through Ingress, follow this troubleshooting sequence:
+
+1. **Verify Ingress Controller is installed and healthy**  
+   - Check if the Ingress controller pods (nginx-ingress, traefik, ALB Ingress, etc.) are running:  
+     ```bash
+     kubectl get pods -n ingress-nginx
+     ```
+   - The controller creates/manages the external Load Balancer — if it's not running, Ingress won't work.
+
+2. **Check Ingress controller logs**  
+   - Look for errors related to your Ingress resource:  
+     ```bash
+     kubectl logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx
+     ```
+   - Common issues: invalid annotation, backend service not found, TLS misconfiguration.
+
+3. **Verify ingressClassName is correctly set**  
+   - If you are using NGINX Ingress, the Ingress resource must specify:  
+     ```yaml
+     spec:
+       ingressClassName: nginx
+     ```
+   - Without the correct class name, the controller ignores the Ingress.
+
+4. **Validate Ingress YAML**  
+   - Wrong backend service name
+   - Wrong service port
+   - Missing pathType (Prefix/Exact/ImplementationSpecific)
+   - Incorrect host name
+
+5. **Check the backend service and pod**  
+   - Ensure the service has valid endpoints:  
+     ```bash
+     kubectl get endpoints my-service
+     ```
+   - If endpoints are `<none>`, selector mismatch → fix labels.
+
+6. **Check DNS / external LB**  
+   - Verify the Load Balancer IP/DNS is reachable and points to the Ingress controller.
+
+### 23. Why do I need to setup ingress controller after creating ingress?
+
+**Question**: Why do I need to set up an Ingress controller after creating an Ingress resource?
+
+**Answer**:
+The `Ingress` resource is just a **declarative API object** (like a Pod or Service). It describes the desired routing rules (host, path → service), but **no component in core Kubernetes** acts on it.
+
+You need an **Ingress Controller** (a separate component) that:
+
+- Watches for Ingress resources
+- Reads the rules
+- Configures an actual load balancer / proxy (NGINX, Traefik, HAProxy, AWS ALB, etc.)
+- Exposes the application externally
+
+Popular Ingress controllers:
+- NGINX Ingress Controller
+- Traefik
+- Contour
+- AWS Load Balancer Controller (ALB)
+- HAProxy Ingress
+- Istio Ingress Gateway
+
+Without a controller watching the Ingress resource, the object exists in etcd but does **nothing**.
+
+### 24. We have an in-house LB, can we use ingress with our load balancer?
+
+**Question**: We have an in-house load balancer. Can we use it with Kubernetes Ingress?
+
+**Answer**:
+Yes — but you need an **Ingress Controller** that can configure your in-house load balancer.
+
+Kubernetes does **not** natively know how to talk to your custom/internal LB.
+
+Options:
+
+1. **Use an existing controller that supports your LB** (if available).
+
+2. **Develop a custom Ingress Controller**  
+   - Use **controller-runtime** (Go) or **Operator SDK**.
+   - Watch Ingress resources.
+   - Call your load balancer’s API to create/update virtual servers, pools, health checks, etc.
+
+3. **Use MetalLB** (bare-metal) + standard Ingress controller.
+
+Bottom line:  
+You need a controller that translates Kubernetes Ingress objects into configuration for **your specific load balancer**.
+
+### 25. Your deployment has replicas: 3 but only 1 pod is running — what could be wrong?
+
+**Question**: A Deployment specifies replicas: 3 but only 1 pod is running. What could be wrong?
+
+**Answer**:
+Most common causes:
+
+1. **Insufficient cluster resources**  
+   - Nodes don’t have enough CPU/memory → scheduler cannot place additional pods.
+   - Check: `kubectl describe pod <pod-name>` → "Insufficient cpu/memory".
+
+2. **Node taints / missing tolerations**  
+   - Nodes have taints → pods without tolerations cannot be scheduled.
+
+3. **Image pull issues**  
+   - Image not found, private registry without pull secret → `ImagePullBackOff`.
+
+4. **Pod failing startup**  
+   - CrashLoopBackOff — check `kubectl logs --previous`.
+
+5. **Pod stuck in Pending**  
+   - Resource requests too high, PVC not bound, node selector/affinity not satisfied.
+
+**Diagnostic commands**:
+```bash
+kubectl get pods
+kubectl describe pod <pod-name>
+kubectl describe deployment <name>
+kubectl get events
+```
+
+### 26. Your pod mounts a ConfigMap but changes to the ConfigMap are not reflected?
+
+**Question**: A Pod mounts a ConfigMap as volume but updates to the ConfigMap are not visible inside the container. Why?
+
+**Answer**:
+There are two ways to consume a ConfigMap:
+
+1. **As environment variables** → values are injected at pod creation → changes **not** reflected without restart.
+
+2. **As volume mount** → files are mounted → Kubernetes **automatically updates** the files when ConfigMap changes (usually within ~1 minute).
+
+**Correct behavior**:
+```yaml
+volumeMounts:
+  - name: config-volume
+    mountPath: /etc/config
+volumes:
+  - name: config-volume
+    configMap:
+      name: my-config
+```
+
+If using env vars → restart pod required.  
+If using volume → changes propagate automatically.
+
+### 27. Explain concept of node affinity?
+
+**Question**: Explain node affinity in Kubernetes.
+
+**Answer**:
+Node affinity is a way to **influence** where Kubernetes schedules Pods — it allows you to express preferences or hard requirements about which nodes a Pod should run on, based on node labels.
+
+There are two types:
+
+1. **requiredDuringSchedulingIgnoredDuringExecution** (hard requirement)  
+   → Pod **will not** be scheduled unless the rule is satisfied.
+
+2. **preferredDuringSchedulingIgnoredDuringExecution** (soft preference)  
+   → Scheduler tries to satisfy the rule, but can schedule elsewhere if no node matches.
+
+**Example (hard)**:
+```yaml
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: disktype
+          operator: In
+          values:
+          - ssd
+```
+
+**Example (soft)**:
+```yaml
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 80
+      preference:
+        matchExpressions:
+        - key: zone
+          operator: In
+          values:
+          - zone-a
+```
+
+### 28. What is the difference between node affinity and node label selector?
+
+**Question**: What is the difference between node affinity and nodeSelector?
+
+**Answer**:
+
+| Feature                     | nodeSelector (old)                  | Node Affinity (new)                                      |
+|-----------------------------|-------------------------------------|----------------------------------------------------------|
+| Syntax                      | Simple key:value                    | Rich expressions (In, NotIn, Exists, Gt, Lt, etc.)        |
+| Hard requirement            | Yes                                 | Yes (requiredDuringSchedulingIgnoredDuringExecution)    |
+| Soft preference             | No                                  | Yes (preferredDuringSchedulingIgnoredDuringExecution)   |
+| Weighting                   | No                                  | Yes (soft rules have weights 1–100)                      |
+| Multiple terms (OR logic)   | No                                  | Yes                                                      |
+
+**Recommendation**: Use **node affinity** for new workloads — more powerful and future-proof.
+
+### 29. What is container runtime in Kubernetes?
+
+**Question**: What is a container runtime in Kubernetes?
+
+**Answer**:
+The **container runtime** is the software that actually runs containers on a node.
+
+It handles:
+- Pulling images
+- Unpacking them
+- Creating cgroups, namespaces, network interfaces
+- Starting/stopping containers
+
+Kubernetes uses the **Container Runtime Interface (CRI)** to abstract different runtimes.
+
+Common runtimes:
+- **containerd** (default in recent versions)
+- **CRI-O** (lightweight, Kubernetes-native)
+- **Docker** (deprecated/removed in newer versions)
+
+**Flow**: kubelet → CRI → container runtime → container
+
+### 30. What is k8s QoS (Quality of Service)?
+
+**Question**: What is Kubernetes Quality of Service (QoS) class and why is it important?
+
+**Answer**:
+Kubernetes assigns a **QoS class** to every Pod based on its resource requests and limits. QoS helps the kubelet decide which Pods to evict when a node runs out of resources.
+
+Three classes:
+
+| QoS Class     | Requests | Limits      | Eviction Priority | Use Case                             |
+|---------------|----------|-------------|-------------------|--------------------------------------|
+| **Guaranteed** | Set      | Set & equal | Lowest            | Critical workloads (databases)       |
+| **Burstable**  | Set      | Higher      | Medium            | Most applications                    |
+| **BestEffort** | Not set  | Not set     | Highest           | Low-priority / batch jobs            |
+
+**Eviction order**:
+1. BestEffort
+2. Burstable
+3. Guaranteed
+
+**Check QoS**:
+```bash
+kubectl describe pod <pod-name> | grep -i qos
+```
+
 ## Conclusion
-Understanding Kubernetes architecture, component interaction, Services, kube-proxy, Network Policies, and deployment strategies is fundamental for any Kubernetes interview. These answers cover the most frequently asked conceptual and practical questions, helping you confidently explain how Kubernetes achieves reliability, service discovery, security, and zero-downtime deployments.
+Understanding Kubernetes architecture, component interaction, Services, kube-proxy, Network Policies, probes, and deployment strategies is fundamental for any Kubernetes interview. These answers cover the most frequently asked conceptual and practical questions, helping you confidently explain how Kubernetes achieves reliability, service discovery, security, and zero-downtime deployments.
+
