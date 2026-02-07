@@ -2,6 +2,40 @@
 
 This repository provides a comprehensive Q&A guide for preparing for Kubernetes-related interview questions. It covers Kubernetes architecture, components interaction, services, labels/selectors, service types, kube-proxy, headless services, cross-namespace access, network policies, deployment strategies, and rollback approaches.
 
+## Table of Contents
+
+ 1. Explain Kubernetes Architecture
+ 2. How do various Kubernetes components interact with each other?
+ 3. What is the purpose of a Service in Kubernetes?
+ 4. Why is hardcoding Pod IPs a bad practice?
+ 5. What are the different types of Services in Kubernetes?
+ 6. How are Kubernetes Services related to kube-proxy?
+ 7. What is the disadvantage of using LoadBalancer-type Services?
+ 8. What is a Headless Service in Kubernetes, and when do you use it?
+ 9. What are Labels and Selectors in Kubernetes?
+ 10. NodePort vs LoadBalancer Service — which would you recommend?
+ 11. Can a Pod access a Service in a different namespace?
+ 12. How do you restrict access to a database Pod so only one application can access it?
+ 13. Explain the deployment strategy followed in your organization?
+ 14. Explain the rollback strategy followed in your organization?
+ 15. How would you design a solution to avoid rollbacks?
+ 16. Explain the deployment strategies that you used in the past?
+ 17. Explain the role of CoreDNS in k8s?
+ 18. A DevOps engineer tainted a node as "NoSchedule". Can you still schedule a Pod?
+ 19. Pod is stuck in CrashLoopBackOff?
+ 20. What is the difference between liveness and readiness probes?
+ 21. Explain the difference between Ingress and LoadBalancer service type.
+ 22. Your app works with ClusterIP but fails with Ingress — how do you troubleshoot it?
+ 23. Why do I need to setup ingress controller after creating ingress?
+ 24. We have an in-house LB, can we use ingress with our load balancer?
+ 25. Your deployment has replicas: 3 but only 1 pod is running — what could be wrong?
+ 26. Your pod mounts a ConfigMap but changes to the ConfigMap are not reflected?
+ 27. Explain concept of node affinity?
+ 28. What is the difference between node affinity and node label selector?
+ 29. What is container runtime in Kubernetes?
+ 30. What is k8s QoS (Quality of Service)?
+
+
 ## Q&A for Kubernetes Interview
 
 ### 1. Explain Kubernetes Architecture
