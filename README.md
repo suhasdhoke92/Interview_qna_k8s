@@ -815,6 +815,126 @@ Three classes:
 kubectl describe pod <pod-name> | grep -i qos
 ```
 
+### 31. K8s request and limits
+
+**Question**: Explain Kubernetes requests and limits.
+
+**Answer**:
+Requests and limits are defined under `resources` in a container spec to manage CPU and memory usage.
+
+- **Requests**: Minimum guaranteed resources used by the scheduler for pod placement.
+  ```yaml
+  resources:
+    requests:
+      memory: "4096Mi"
+      cpu: "4"
+  ```
+  The scheduler ensures a node has at least these resources available before scheduling the Pod.
+
+- **Limits**: Maximum allowed resources enforced by the kubelet at runtime.
+  ```yaml
+  resources:
+    limits:
+      memory: "8Gi"
+      cpu: "6"
+  ```
+  If a container exceeds limits:
+  - Memory: Pod is evicted/OOMKilled.
+  - CPU: Throttled (no eviction).
+
+**Key Difference**:
+- **Requests**: Used for scheduling (guaranteed minimum).
+- **Limits**: Runtime enforcement (maximum cap) by kubelet.
+- Exceeding limits can lead to pod termination to protect node stability and other workloads.
+
+### 32. Can we use k8s master for scheduling the pods?
+
+**Question**: Can we use Kubernetes master nodes for scheduling Pods?
+
+**Answer**:
+Yes, it is technically possible, but **not recommended** in production.
+
+- **Default Behavior**: Master nodes have a taint `node-role.kubernetes.io/master:NoSchedule` (or `control-plane` in newer versions), preventing the scheduler from placing Pods.
+- **How to Allow**:
+  - Remove the taint:
+    ```bash
+    kubectl taint nodes <master-node-name> node-role.kubernetes.io/master:NoSchedule-
+    ```
+  - Or add tolerations to Pods:
+    ```yaml
+    tolerations:
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+    ```
+
+- **Why Avoid**:
+  - Isolation: Control plane components (API server, etcd, scheduler) need dedicated resources for cluster stability.
+  - Risk: Workload Pods could starve control plane processes, causing cluster instability.
+
+**Best Practice**: Keep master nodes dedicated to control plane duties.
+
+### 33. Explain horizontal vs vertical scaling?
+
+**Question**: Explain horizontal vs vertical scaling.
+
+**Answer**:
+
+- **Horizontal Scaling** (Scale Out/In):
+  - Add or remove instances/nodes/Pods.
+  - **Cluster Level**: Add worker nodes to the cluster.
+  - **Application Level**: Increase replica count in Deployment/HPA:
+    ```yaml
+    replicas: 5  # Or use HorizontalPodAutoscaler
+    ```
+  - **Advantages**: Better fault tolerance, no downtime, handles traffic spikes.
+  - Common in Kubernetes via HPA.
+
+- **Vertical Scaling** (Scale Up/Down):
+  - Increase resources (CPU/memory) on existing instances.
+  - **Application Level**: Update requests/limits → Pod restart required for changes to take effect:
+    ```yaml
+    resources:
+      requests:
+        cpu: "4"
+        memory: "8Gi"
+      limits:
+        cpu: "6"
+        memory: "12Gi"
+    ```
+  - **Advantages**: Simpler for stateful/monolithic apps.
+  - **Disadvantages**: Requires Pod restart, limited by node capacity.
+
+**Kubernetes Preference**: Horizontal scaling is preferred due to immutability and easier automation.
+
+### 34. Types of secrets in k8s? And why are we have different types?
+
+**Question**: What are the types of Secrets in Kubernetes, and why do we have different types?
+
+**Answer**:
+Kubernetes Secrets store sensitive data (passwords, tokens, keys). Different types provide specific structure and use cases.
+
+| Type                              | Use Case                                      | Example Content                              |
+|-----------------------------------|-----------------------------------------------|----------------------------------------------|
+| **Opaque** (default)              | Generic key-value secrets                     | Arbitrary data (DB credentials, API keys)    |
+| **kubernetes.io/dockerconfigjson**| Image pull secrets from private registries    | `.docker/config.json` for auth                |
+| **kubernetes.io/tls**             | TLS certificates and keys                     | `tls.crt` and `tls.key` for Ingress          |
+| **kubernetes.io/service-account-token** | Service account tokens (deprecated)      | JWT for service account authentication       |
+| **bootstrap.kubernetes.io/token** | Bootstrap tokens for node joining              | Used during cluster bootstrap                |
+
+**Why Different Types**:
+- **Structure Validation**: Kubernetes validates content (e.g., TLS secrets require valid cert/key).
+- **Automation**: Specific types trigger built-in behaviors (e.g., dockerconfigjson used for ImagePullSecrets).
+- **Security & Flexibility**: Opaque for custom data, specialized types for common patterns.
+
+**Creation Example**:
+```bash
+kubectl create secret generic my-secret --from-literal=user=admin --from-literal=password=secret
+kubectl create secret tls my-tls --cert=tls.crt --key=tls.key
+kubectl create secret docker-registry my-reg --docker-server=... --docker-username=... --docker-password=...
+```
+
+
 ## Conclusion
 Understanding Kubernetes architecture, component interaction, Services, kube-proxy, Network Policies, probes, and deployment strategies is fundamental for any Kubernetes interview. These answers cover the most frequently asked conceptual and practical questions, helping you confidently explain how Kubernetes achieves reliability, service discovery, security, and zero-downtime deployments.
 
