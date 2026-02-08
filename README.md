@@ -610,6 +610,11 @@ When an application works fine via ClusterIP but fails through Ingress, follow t
 
 6. **Check DNS / external LB**  
    - Verify the Load Balancer IP/DNS is reachable and points to the Ingress controller.
+  
+7. **Check Backend Pod Probes**
+   - Ensure readiness probes pass on backend Pods
+   - Ingress won't route to Pods failing readiness probe
+   - Check: kubectl describe pod <pod-name> | grep -A 5 "Readiness"
 
 ### 23. Why do I need to setup ingress controller after creating ingress?
 
@@ -713,6 +718,11 @@ volumes:
 
 If using env vars → restart pod required.  
 If using volume → changes propagate automatically.
+
+**Note**: The automatic update depends on:
+- kubelet syncing (default ~60 seconds)
+- The mounted ConfigMap files are updated, but the application 
+  must read them again (not loaded in memory once)
 
 ### 27. Explain concept of node affinity?
 
@@ -871,6 +881,8 @@ Yes, it is technically possible, but **not recommended** in production.
         operator: Exists
         effect: NoSchedule
     ```
+- **Newer versions (1.25+)**: Master nodes have a taint `node-role.kubernetes.io/control-plane:NoSchedule`
+- **Older versions**: Master nodes have a taint `node-role.kubernetes.io/master:NoSchedule`
 
 - **Why Avoid**:
   - Isolation: Control plane components (API server, etcd, scheduler) need dedicated resources for cluster stability.
