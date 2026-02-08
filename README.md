@@ -34,6 +34,10 @@ This repository provides a comprehensive Q&A guide for preparing for Kubernetes-
  28. What is the difference between node affinity and node label selector?
  29. What is container runtime in Kubernetes?
  30. What is k8s QoS (Quality of Service)?
+ 31. K8s request and limits
+ 32. Can we use k8s master for scheduling the pods?
+ 33. Explain horizontal vs vertical scaling?
+ 34. Types of secrets in k8s? And why are we have different types?
 
 
 ## Q&A for Kubernetes Interview
