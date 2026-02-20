@@ -44,6 +44,7 @@ This repository provides a comprehensive Q&A guide for preparing for Kubernetes-
      35.3 OOM killed issue with pod. - kil -3 for **thread dump** , jstack - **heap dump** in java lang. shared with developer.
      35.4 pod eviction issue on one of the node
      35.5 upgrade cluster. - First take the backup, Release Notes, control plane-> ETCD, API, Scheduler, worker plane-> cordon
+36. how many types of networks exist in Kubernetes? -> Pod Network (Cluster Network), Service Network(ClusterIP Network), Node Network (Underlying Infrastructure) , Optional / Advanced Networks , Ingress / External Networking
 
 
 ## Q&A for Kubernetes Interview
