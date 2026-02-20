@@ -38,6 +38,12 @@ This repository provides a comprehensive Q&A guide for preparing for Kubernetes-
  32. Can we use k8s master for scheduling the pods?
  33. Explain horizontal vs vertical scaling?
  34. Types of secrets in k8s? And why are we have different types?
+ 35. challenges that you faced while workingon k8s.
+     35.1 Resource shareing - multiple NS, (Dev / Qa / Prod), (leaking memory) - **Resource quota** (limit allocate at NS) for NS 
+     35.2 **Resource limit** - (Resource **request** and **limit**) one perticular pod consuming high leaking memory 
+     35.3 OOM killed issue with pod. - kil -3 for **thread dump** , jstack - **heap dump** in java lang. shared with developer.
+     35.4 pod eviction issue on one of the node
+     35.5 upgrade cluster. - First take the backup, Release Notes, control plane-> ETCD, API, Scheduler, worker plane-> cordon
 
 
 ## Q&A for Kubernetes Interview
